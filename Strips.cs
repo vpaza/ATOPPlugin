@@ -139,13 +139,26 @@ namespace ATOP
                         OnMouseClick = ToggleRouteOfFlight,
                     };
                 case "ATOP_RADAR_CONTACT_IND":
-                    if (!AircraftSituationDisplay.radartoggle.TryGetValue(flightDataRecord.Callsign, out _))
+                    if (AircraftSituationDisplay.radartoggle.TryGetValue(flightDataRecord.Callsign, out _))
                     {
                         return new CustomStripItem()
                         {
                             Text = "A",
-                            BackColourIdentity = Colours.Identities.StripBackground,
+                            BackColourIdentity = Colours.Identities.Custom,
+                            CustomBackColour = Colors.LightBlue,
                             OnMouseClick = AircraftSituationDisplay.HandleRadarFlagClick
+                        };
+                    }
+                    else if (
+                        radarTrack != null && (
+                        radarTrack.RadarTypes.HasFlag(RDP.RadarTypes.SSR_ModeC) ||
+                        radarTrack.RadarTypes.HasFlag(RDP.RadarTypes.SSR_ModeS)
+                    )) {
+                        return new CustomStripItem()
+                        {
+                            Text = "A",
+                            BackColourIdentity = Colours.Identities.Custom,
+                            CustomBackColour = Colors.RadarStrip,
                         };
                     }
                     else
