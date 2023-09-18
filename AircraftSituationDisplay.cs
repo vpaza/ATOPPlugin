@@ -83,5 +83,10 @@ namespace ATOP
                 radartoggle.TryAdd(callsign, true);
             }
         }
+
+        internal static void HandleDownlinkClick(CustomLabelItemMouseClickEventArgs args)
+        {
+            AircraftSituationDisplay.downlink.TryRemove(args.Track.GetFDR().Callsign, out _);
+        }
     }
 }

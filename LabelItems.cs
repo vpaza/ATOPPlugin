@@ -54,6 +54,7 @@ namespace ATOP
                         {
                             Text = "▼",
                             Border = BorderFlags.All,
+                            OnMouseClick = AircraftSituationDisplay.HandleDownlinkClick,
                         };
                     else
                         return new CustomLabelItem()
@@ -238,12 +239,6 @@ namespace ATOP
                     if (AircraftSituationDisplay.GetValue<string, bool>(AircraftSituationDisplay.radartoggle, flightDataRecord.Callsign))
                     {
                         s = "★";
-                    }
-                    else if (radarTrack != null && (
-                        radarTrack.RadarTypes.HasFlag(RDP.RadarTypes.SSR_ModeC) ||
-                        radarTrack.RadarTypes.HasFlag(RDP.RadarTypes.SSR_ModeS)
-                    )) {
-                        s = "☆";
                     }
                     else
                     {
