@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.Remoting;
-using System.Text;
-using System.Threading.Tasks;
-using vatsys.Plugin;
+﻿using vatsys.Plugin;
 
 namespace ATOP
 {
@@ -24,7 +18,7 @@ namespace ATOP
         internal readonly static CustomColour NotCurrentDataAuthority = Magenta;
         internal readonly static CustomColour SeparationFlags = LightBlue;
         internal readonly static CustomColour Pending = Green;
-        internal readonly static CustomColour RadarContactStrip = LightBlue;
+        internal readonly static CustomColour HighlightFieldStrip = LightBlue;
         internal readonly static CustomColour RadarStrip = Yellow;
     }
 }

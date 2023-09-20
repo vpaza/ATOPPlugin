@@ -1,18 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.Composition;
-using System.Deployment.Internal;
+﻿using System.ComponentModel.Composition;
 using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using vatsys;
 using vatsys.Plugin;
 
 namespace ATOP
 {
-    [Export(typeof(vatsys.Plugin.IPlugin))]
-    public class ATOP : vatsys.Plugin.ILabelPlugin, vatsys.Plugin.IStripPlugin
+    [Export(typeof(IPlugin))]
+    public class ATOP : ILabelPlugin, IStripPlugin
     {
         public string Name => "Advanced Techniques and Oceanic Procedures";
         private readonly LabelItems LabelItems = new LabelItems();
@@ -27,62 +22,13 @@ namespace ATOP
             // GetFDRIndex returns -1 if the callsign is not found (disconnected)
             if (FDP2.GetFDRIndex(updated.Callsign) == -1)
             {
-                AircraftSituationDisplay.eastboundCallsigns.TryRemove(updated.Callsign, out _);
-                AircraftSituationDisplay.adsbcpdlcValues.TryRemove(updated.Callsign, out _);
-                AircraftSituationDisplay.adsflagValues.TryRemove(updated.Callsign, out _);
-                AircraftSituationDisplay.mntflagValues.TryRemove(updated.Callsign, out _);
-                AircraftSituationDisplay.altValues.TryRemove(updated.Callsign, out _);
-                AircraftSituationDisplay.radartoggle.TryRemove(updated.Callsign, out _);
-                AircraftSituationDisplay.mntflagtoggle.TryRemove(updated.Callsign, out _);
-                AircraftSituationDisplay.downlink.TryRemove(updated.Callsign, out _);
-                AircraftSituationDisplay.graphicRouteShown.TryRemove(updated.Callsign, out _);
+                FlightPlan.Remove(updated.Callsign);
                 return;
             }
 
-            AircraftSituationDisplay.adsbcpdlcValues.AddOrUpdate(
-                updated.Callsign,
-                Shared.GetCPDLCIndicator(updated),
-                (k, v) => Shared.GetCPDLCIndicator(updated)
-            );
+            FlightPlan.AddOrUpdate(updated.Callsign, updated);
 
-            AircraftSituationDisplay.adsflagValues.AddOrUpdate(
-                updated.Callsign,
-                Shared.GetADSCFlag(updated),
-                (k, v) => Shared.GetADSCFlag(updated)
-            );
-
-            AircraftSituationDisplay.mntflagValues.AddOrUpdate(
-                updated.Callsign,
-                Shared.GetMNTFlag(updated),
-                (k, v) => Shared.GetMNTFlag(updated)
-            );
-
-            AircraftSituationDisplay.altValues.AddOrUpdate(
-                updated.Callsign,
-                Shared.GetAltFlag(updated),
-                (k, v) => Shared.GetAltFlag(updated)
-            );
-
-            AircraftSituationDisplay.graphicRouteShown.AddOrUpdate(
-                updated.Callsign,
-                false,
-                (k, v) => false
-            );
-
-            if (updated.ParsedRoute.Count > 1)
-            {
-                double trk = Conversions.CalculateTrack(
-                    updated.ParsedRoute.First().Intersection.LatLong,
-                    updated.ParsedRoute.Last().Intersection.LatLong
-                );
-                bool east = trk >= 0 && trk <= 180;
-                AircraftSituationDisplay.eastboundCallsigns.AddOrUpdate(
-                    updated.Callsign,
-                    east,
-                    (k, v) => east
-                );
-            }
-
+            // Check if we need to automatically assume or drop the aircraft
             AutoAssume(updated);
             AutoDrop(updated);
         }
@@ -131,7 +77,7 @@ namespace ATOP
 
         private void AutoDrop(FDP2.FDR fdr)
         {
-            if (fdr == null && fdr.CoupledTrack != null) { return; }
+            if (fdr == null || fdr.CoupledTrack == null) { return; }
 
             if (
                     MMI.GetSectorEntryTime(fdr) == null &&
@@ -139,7 +85,7 @@ namespace ATOP
                 )
             {
                 MMI.HandoffToNone(fdr);
-                Thread.Sleep(300000);
+                Thread.Sleep(50000);
                 RDP.DeCouple(fdr.CoupledTrack);
             }
         }
@@ -164,5 +110,82 @@ namespace ATOP
         {
             return Strips.GetCustomStripItem(itemType, track, flightDataRecord, radarTrack); // Strips.cs
         }
+    }
+
+    internal class Symbols
+    {
+        // Symbols by type
+        // Commented out symbols are not currently used but may be used in the future, they are commented
+        // out solely to silence the warnings of unused variables
+        private static string THREE = "3";
+        private static string FOUR = "4";
+        private static string A = "A";
+        private static string D = "D";
+        private static string H = "H";
+        private static string M = "M";
+        private static string O = "O";
+        public static string R = "R";
+        private static string W = "W";
+        //private static string X = "X";
+        private static string AMPERSAND = "&";
+        private static string ASTERISK_SPECIAL = "✱";
+        private static string ARROW_UP = "↑";
+        private static string ARROW_DOWN = "↓";
+        private static string BOXED_ASTERISK = "⧆";
+        private static string CARROT = "^";
+        private static string DOT = "◦";
+        private static string LOWERCASE_X = "x";
+        private static string PLUS = "+";
+        private static string MINUS = "-";
+        private static string SPACE = " ";
+        //private static string SQUARE_FILLED = "⬛";
+        private static string SQUARE_HOLLOW = "⬜";
+        private static string STAR_FILLED = "★";
+        //private static string STAR_HOLLOW = "☆";
+        private static string TRIANGLE_DOWN = "▼";
+        //private static string TRIANGLE_UP = "▲";
+
+        // Symbols by name, references types above
+
+        public static string ALTITUDE_CLIMBING = ARROW_UP;
+        public static string ALTITUDE_DESCENDING = ARROW_DOWN;
+        public static string ALTITUDE_DEVIATION_ABOVE = PLUS;
+        public static string ALTITUDE_DEVIATION_BELOW = MINUS;
+        public static string ALTITUDE_LEVEL = SPACE;
+
+        public static string ANNOTATION = AMPERSAND;
+        public static string NO_ANNOTATION = DOT;
+
+        public static string EQUIP_ADSB_CPDLC = ASTERISK_SPECIAL;
+        public static string EQUIP_NO_ADSB_NO_CPDLC = BOXED_ASTERISK;
+        public static string EQUIP_NO_ADSB_CPDLC = SQUARE_HOLLOW;
+
+        public static string DOWNLINK_FLAG = TRIANGLE_DOWN;
+        public static string DOWNLINK_NO_FLAG = SQUARE_HOLLOW;
+
+        public static string HANDOFF = H;
+        public static string HANDOFF_COMPLETED = O;
+
+        public static string INHIBIT_FLAG = CARROT;
+        public static string INHIBIT_NO_FLAG = SPACE;
+
+        public static string JET = M;
+
+        public static string LATERAL_SEPARATION_RNP4 = FOUR;
+        public static string LATERAL_SEPARATION_RNP10 = R;
+        public static string LATERAL_SEPARATION_NONE = SPACE;
+        public static string LONGITUDINAL_RNP4 = THREE;
+        public static string LONGITUDINAL_RNP10 = D;
+        public static string LONGITUDINAL_TIME = SPACE;
+
+        public static string LABEL_RADAR_CONTACT_FLAG = STAR_FILLED;
+        public static string LABEL_NO_RADAR_CONTACT_FLAG = DOT;
+        public static string RESTRICTION = LOWERCASE_X;
+        public static string NO_RESTRICTION = SPACE;
+
+        public static string RVSM = W;
+
+        public static string SPACER = SPACE;
+        public static string STRIP_RADAR_CONTACT = A;
     }
 }

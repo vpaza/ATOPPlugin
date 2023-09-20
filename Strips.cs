@@ -1,11 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using vatsys.Plugin;
 using vatsys;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace ATOP
 {
@@ -14,6 +9,8 @@ namespace ATOP
         internal static CustomStripItem GetCustomStripItem(string itemType, Track track, FDP2.FDR flightDataRecord, RDP.RadarTrack radarTrack)
         {
             if (flightDataRecord == null) { return null; }
+
+            var atopFPL = FlightPlan.GetFlightPlan(flightDataRecord.Callsign);
 
             CustomStripItem item;
             string s;
@@ -26,7 +23,7 @@ namespace ATOP
                         Text = flightDataRecord.Callsign
                     };
 
-                    if (AircraftSituationDisplay.GetValue<string, bool>(AircraftSituationDisplay.eastboundCallsigns, flightDataRecord.Callsign))
+                    if (atopFPL.IsEastbound)
                     {
                         item.BackColourIdentity = Colours.Identities.StripText;
                         item.ForeColourIdentity = Colours.Identities.StripBackground;
@@ -41,7 +38,7 @@ namespace ATOP
                 case "ATOP_CURRENT_DATA_AUTHORITY":
                     item = new CustomStripItem()
                     {
-                        Text = flightDataRecord.ControllingSector?.Name ?? null
+                        Text = Shared.FindSectorID(flightDataRecord.ControllingSector?.Name) ?? null
                     };
 
                     if (
@@ -55,12 +52,18 @@ namespace ATOP
 
                     return item;
                 case "ATOP_ADSB_CPDLC":
+                    if (atopFPL.HasCPDLC && atopFPL.HasADSB)
+                        s = Symbols.EQUIP_ADSB_CPDLC;
+                    else if (!atopFPL.HasADSB && atopFPL.HasCPDLC)
+                        s = Symbols.EQUIP_NO_ADSB_CPDLC;
+                    else
+                        s = Symbols.EQUIP_NO_ADSB_NO_CPDLC;
                     item = new CustomStripItem()
                     {
-                        Text = Shared.GetCPDLCIndicator(flightDataRecord).ToString()
+                        Text = s
                     };
 
-                    if (AircraftSituationDisplay.GetValue<string, bool>(AircraftSituationDisplay.eastboundCallsigns, flightDataRecord.Callsign))
+                    if (atopFPL.IsEastbound)
                     {
                         item.BackColourIdentity = Colours.Identities.StripText;
                         item.ForeColourIdentity = Colours.Identities.StripBackground;
@@ -68,23 +71,43 @@ namespace ATOP
 
                     return item;
                 case "ATOP_SEPARATION_FLAG":
-                    return new CustomStripItem()
+                    item = new CustomStripItem()
                     {
-                        Text = Shared.GetADSCFlag(flightDataRecord).ToString()
+                        Text = Symbols.LONGITUDINAL_TIME,
+                        BackColourIdentity = Colours.Identities.Custom,
+                        CustomBackColour = Colors.HighlightFieldStrip
                     };
+                    if (atopFPL.RNP == FlightPlan.RNPFlag.RNP4)
+                    {
+                        item.Text = Symbols.LONGITUDINAL_RNP4;
+                    }
+                    else if (atopFPL.RNP == FlightPlan.RNPFlag.RNP10)
+                    {
+                        item.Text = Symbols.LONGITUDINAL_RNP4;
+                    }
+                    else
+                    {
+                        item.BackColourIdentity = Colours.Identities.StripBackground;
+                        item.CustomBackColour = null;
+                    }
+                    return item;
                 case "ATOP_T10_FLAG":
-                    if (flightDataRecord.PerformanceData?.IsJet ?? false)
+                    if (atopFPL.IsJet)
                         return new CustomStripItem()
                         {
-                            Text = "M"
+                            Text = Symbols.JET,
+                            BackColourIdentity = Colours.Identities.Custom,
+                            CustomBackColour = Colors.HighlightFieldStrip
                         };
 
                     return null;
                 case "ATOP_MNT_FLAG":
-                    if (flightDataRecord.PerformanceData?.IsJet ?? false)
+                    if (atopFPL.IsJet)
                         return new CustomStripItem()
                         {
-                            Text = "R"
+                            Text = Symbols.R,
+                            BackColourIdentity = Colours.Identities.Custom,
+                            CustomBackColour = Colors.HighlightFieldStrip
                         };
 
                     return null;
@@ -94,23 +117,23 @@ namespace ATOP
                         {
                             BackColourIdentity = Colours.Identities.Custom,
                             CustomBackColour = Colors.SeparationFlags,
-                            Text = "W"
+                            Text = Symbols.RVSM
                         };
 
                     return null;
                 case "ATOP_VERTICAL_MOVEMENT_IND":
-                    double vertical_speed = radarTrack?.VerticalSpeed ?? flightDataRecord.PredictedPosition.VerticalSpeed;
-                    double level = (radarTrack?.CorrectedAltitude ?? flightDataRecord.PredictedPosition.Altitude) / 100;
-                    int clearedFlightLevel;
-                    Int32.TryParse(flightDataRecord.CFLString, out clearedFlightLevel);
-
-                    s = " ";
-                    if (level == clearedFlightLevel || level == flightDataRecord.RFL)
-                        s = " ";
-                    else if (clearedFlightLevel > level && track.NewCFL || vertical_speed > 300)
-                        s = "↑";
-                    else if (clearedFlightLevel > 0 && clearedFlightLevel < level && track.NewCFL || vertical_speed < -300)
-                        s = "↓";
+                    switch (atopFPL.AltitudeFlag)
+                    {
+                        case FlightPlan.AltitudeFlags.Climbing:
+                            s = Symbols.ALTITUDE_CLIMBING;
+                            break;
+                        case FlightPlan.AltitudeFlags.Descending:
+                            s = Symbols.ALTITUDE_DESCENDING;
+                            break;
+                        default:
+                            s = Symbols.ALTITUDE_LEVEL;
+                            break;
+                    }
 
                     return new CustomStripItem()
                     {
@@ -120,61 +143,44 @@ namespace ATOP
                     item = new CustomStripItem(){};
                     if (String.IsNullOrEmpty(flightDataRecord.LabelOpData))
                     {
-                        item.Text = "◦";
+                        item.Text = Symbols.NO_ANNOTATION;
                     }
                     else
                     {
-                        item.Text = "&";
+                        item.Text = Symbols.ANNOTATION;
                     }
                     return item;
                 case "ATOP_LATERAL_FLAG":
+                    if (atopFPL.RNP == FlightPlan.RNPFlag.RNP4)
+                        s = Symbols.LATERAL_SEPARATION_RNP4;
+                    else if (atopFPL.RNP == FlightPlan.RNPFlag.RNP10)
+                        s = Symbols.LATERAL_SEPARATION_RNP10;
+                    else
+                        s = Symbols.LATERAL_SEPARATION_NONE;
                     return new CustomStripItem()
                     {
-                        Text = Shared.GetLateralFlag(flightDataRecord).ToString()
+                        Text = s,
+                        BackColourIdentity = (atopFPL.RNP != FlightPlan.RNPFlag.None) ? Colours.Identities.Custom : Colours.Identities.StripBackground,
+                        CustomBackColour = (atopFPL.RNP != FlightPlan.RNPFlag.None) ? Colors.HighlightFieldStrip : null
                     };
                 case "ATOP_ROUTE_OF_FLIGHT_IND":
                     return new CustomStripItem()
                     {
                         Text = "F",
-                        OnMouseClick = ToggleRouteOfFlight,
+                        OnMouseClick = ToggleRouteOfFlight, // vatSys doesn't call this... :(
                     };
                 case "ATOP_RADAR_CONTACT_IND":
-                    if (AircraftSituationDisplay.radartoggle.TryGetValue(flightDataRecord.Callsign, out _))
+                    return new CustomStripItem()
                     {
-                        return new CustomStripItem()
-                        {
-                            Text = "A",
-                            BackColourIdentity = Colours.Identities.Custom,
-                            CustomBackColour = Colors.LightBlue,
-                            OnMouseClick = AircraftSituationDisplay.HandleRadarFlagClick
-                        };
-                    }
-                    else if (
-                        radarTrack != null && (
-                        radarTrack.RadarTypes.HasFlag(RDP.RadarTypes.SSR_ModeC) ||
-                        radarTrack.RadarTypes.HasFlag(RDP.RadarTypes.SSR_ModeS)
-                    )) {
-                        return new CustomStripItem()
-                        {
-                            Text = "A",
-                            BackColourIdentity = Colours.Identities.Custom,
-                            CustomBackColour = Colors.RadarStrip,
-                        };
-                    }
-                    else
-                    {
-                        return new CustomStripItem()
-                        {
-                            Text = "A",
-                            BackColourIdentity = Colours.Identities.Custom,
-                            CustomBackColour = Colors.LightBlue,
-                            OnMouseClick = AircraftSituationDisplay.HandleRadarFlagClick
-                        };
-                    }
+                        Text = Symbols.STRIP_RADAR_CONTACT,
+                        BackColourIdentity = (atopFPL.RadarContactFlag) ? Colours.Identities.Custom : Colours.Identities.StripBackground,
+                        CustomBackColour = (atopFPL.RadarContactFlag) ? Colors.HighlightFieldStrip : null,
+                        OnMouseClick = AircraftSituationDisplay.HandleRadarFlagClick // vatSys doesn't call this... :(
+                    };
                 case "ATOP_SPACER":
                     return new CustomStripItem()
                     {
-                        Text = " "
+                        Text = Symbols.SPACER
                     };
             }
 
@@ -183,7 +189,7 @@ namespace ATOP
 
         private static void ToggleRouteOfFlight(CustomLabelItemMouseClickEventArgs args)
         {
-            if (AircraftSituationDisplay.graphicRouteShown.TryGetValue(args.Track.GetFDR().Callsign, out _))
+/*            if (AircraftSituationDisplay.graphicRouteShown.TryGetValue(args.Track.GetFDR().Callsign, out _))
             {
                 AircraftSituationDisplay.graphicRouteShown.TryRemove(args.Track.GetFDR().Callsign, out _);
                 MMI.HideGraphicRoute(args.Track);
@@ -192,7 +198,7 @@ namespace ATOP
             {
                 AircraftSituationDisplay.graphicRouteShown.TryAdd(args.Track.GetFDR().Callsign, true);
                 MMI.ShowGraphicRoute(args.Track);
-            }
+            } */
         }
     }
 }
