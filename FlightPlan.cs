@@ -167,10 +167,14 @@ namespace ATOP
             }
             else
             {
-                trk = Conversions.CalculateTrack(
-                    fdr.ParsedRoute.First().Intersection.LatLong,
-                    fdr.ParsedRoute.Last().Intersection.LatLong
-                );
+                // This feels dirty... but we do have aircraft that go the long way around so incorrectly
+                // get tagged as westbound when they are actually eastbound.
+                double sumtrks = 0;
+                foreach (var route in fdr.ParsedRoute)
+                {
+                    sumtrks += route.Track;
+                };
+                trk = sumtrks / fdr.ParsedRoute.Count;
             }
 
             // 360-179 = Eastbound
